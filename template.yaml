@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  NotifyBillingToSlack
+  NotifyAwsBillingToSlack
   
   Sample SAM Template for NotifyBillingToSlack
 
@@ -11,7 +11,7 @@ Globals:
     Timeout: 5
 
 Resources:
-  BillingIamRole:
+  NotifyAwsBillingToSlackFunctionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -22,7 +22,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: "sts:AssumeRole"
       Policies:
-        - PolicyName: "NotifyBillingToSlackGolang"
+        - PolicyName: NotifyAwsBillingToSlackFunctionPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -45,33 +45,29 @@ Resources:
                       - !Ref AWS::AccountId
                       - ':parameter/NotifyAwsBillingToSlack.WebHookUrl'
 
-  HelloWorldFunction:
+  NotifyAwsBillingToSlackFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: hello-world/
-      Handler: hello-world
+      #CodeUri: hello-world/
+      #Handler: hello-world
+      CodeUri: handler/
+      Handler: handler/
       Runtime: go1.x
       Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
           PARAM1: VALUE
-      Role: !GetAtt BillingIamRole.Arn
+      Role: !GetAtt NotifyAwsBillingToSlackFunctionRole.Arn
       Events:
-        NotifySlack:
+        ExecEventRule:
           Type: Schedule
           Properties:
             Schedule: cron(0 0 * * ? *) # 日本時間AM9時に毎日通知する
 
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  #HelloWorldAPI:
-  #  Description: "API Gateway endpoint URL for Prod environment for First Function"
-  #  Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
+  NotifyAwsBillingToSlackFunction:
     Description: "First Lambda Function ARN"
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
+    Value: !GetAtt NotifyAwsBillingToSlackFunction.Arn
+  NotifyAwsBillingToSlackFunctionRole:
     Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt BillingIamRole.Arn
+    Value: !GetAtt NotifyAwsBillingToSlackFunctionRole.Arn
