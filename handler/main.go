@@ -24,15 +24,15 @@ import (
 
 // トータル請求情報を格納する構造体
 type TotalBillingInfo struct {
-	startDate    string `json:"start_date"`
-	endDate      string `json:"end_date"`
-	totalBilling string `json:"total_billing"`
+	startDate    string
+	endDate      string
+	totalBilling string
 }
 
 // サービスごとの請求情報を格納する構造体
 type ServiceBillingInfo struct {
-	awsService string `json:"aws_service"`
-	billing    string `json:"billing"`
+	awsService string
+	billing    string
 }
 
 // Slackに送信するメッセージを格納する構造体
@@ -53,12 +53,15 @@ func GetTotalBillingInfo() *TotalBillingInfo {
 	)
 
 	nowDate := time.Now()
-	//end := nowDate.Format("2006-01-02")
-	endDate := nowDate.AddDate(0, 0, -1).Format("2006-01-02")
-	startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 
+	endDate := nowDate.Format("2006-01-02")
+
+	// 月初めの場合は前月の月初めを取得する
+	var startDate string
 	if nowDate.Day() == 1 {
-		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0).Format("2006-01-02")
+		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1).Format("2006-01-02")
+	} else {
+		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 	}
 
 	// https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html#awscostmanagement-GetCostAndUsage-request-TimePeriod
@@ -76,8 +79,6 @@ func GetTotalBillingInfo() *TotalBillingInfo {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// for debug
-	// fmt.Println(output)
 
 	total := output.ResultsByTime[0].Total["AmortizedCost"]
 	totalBilling := aws.StringValue(total.Amount)
@@ -91,6 +92,7 @@ func GetTotalBillingInfo() *TotalBillingInfo {
 
 // サービスごとの請求情報を取得する関数
 func GetServiceBillingInfo() string {
+	fmt.Println("GetServiceBillingInfo start")
 	sess := session.Must(session.NewSession())
 	svc := costexplorer.New(
 		sess,
@@ -98,10 +100,15 @@ func GetServiceBillingInfo() string {
 	)
 
 	nowDate := time.Now()
+
 	endDate := nowDate.Format("2006-01-02")
-	startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
+	// 月初めの場合は前月の月初めを取得する
+	var startDate string
 	if nowDate.Day() == 1 {
-		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0).Format("2006-01-02")
+		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, -1).Format("2006-01-02")
+	} else {
+		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 	}
 
 	// https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html#awscostmanagement-GetCostAndUsage-request-TimePeriod
@@ -137,18 +144,15 @@ func GetServiceBillingInfo() string {
 		awsServiceAndCostMapping[*awsServiceName] = *awsServiceCost
 
 	}
-	// for debug
-	fmt.Println(awsServiceAndCostMapping)
 
 	awsServices := make([]string, numberOfServiceCounts)
 	index := 0
-	for key, _ := range awsServiceAndCostMapping {
+	for key := range awsServiceAndCostMapping {
 		awsServices[index] = key
 		index++
 	}
 	sort.Strings(awsServices)
 
-	//service_billings := ""
 	var awsServiceBillings string
 	for _, v := range awsServices {
 		awsServiceBilling := v + " :  " + awsServiceAndCostMapping[v] + "\n"
@@ -158,26 +162,7 @@ func GetServiceBillingInfo() string {
 
 }
 
-// 構造体が引数にある場合に戻り値の構造体はポインタにできない
-// Slack へのメッセージを作成する関数
-func makeSlackMessage(awsAccountID string, totalBillingInfo *TotalBillingInfo, serviceBillingInfo string) SlackMessage {
-
-	return SlackMessage{
-		// TotalBillingInfoの型を参照している
-		Username:   "aws-cost-and-usage-report (webhook)",
-		Icon_emoji: ":aws-cost-and-usage-report:",
-		Text: fmt.Sprintf("Account ID: %s \n %s ~ %s の請求額は $%s です。\nサービスごとの利用料は以下の通りです。\n ```%s```",
-			awsAccountID,
-			totalBillingInfo.startDate,
-			totalBillingInfo.endDate,
-			totalBillingInfo.totalBilling,
-			serviceBillingInfo,
-		),
-		Color: "good",
-	}
-
-}
-
+// AWS のアカウントIDを取得する関数
 func GetAwsAccountID() string {
 	svc := sts.New(session.New())
 	input := &sts.GetCallerIdentityInput{}
@@ -197,6 +182,7 @@ func GetAwsAccountID() string {
 	return awsAccountID
 }
 
+// Slack へメッセージ投稿する関数
 func PostSlack(message SlackMessage) {
 	input, _ := json.Marshal(message)
 	fmt.Println(string(input))
@@ -218,15 +204,32 @@ func PostSlack(message SlackMessage) {
 	http.Post(slackWebhookURL, "application/json", bytes.NewBuffer(input))
 }
 
+// Slack へのメッセージを作成する関数
+func MakeSlackMessage(awsAccountID string, totalBillingInfo *TotalBillingInfo, serviceBillingInfo string) SlackMessage {
+
+	return SlackMessage{
+		// TotalBillingInfoの型を参照している
+		Username:   "aws-cost-and-usage-report (webhook)",
+		Icon_emoji: ":aws-cost-and-usage-report:",
+		Text: fmt.Sprintf("Account ID: %s \n %s ~ %s の請求額は $%s です。\nサービスごとの利用料は以下の通りです。\n ```%s```",
+			awsAccountID,
+			totalBillingInfo.startDate,
+			totalBillingInfo.endDate,
+			totalBillingInfo.totalBilling,
+			serviceBillingInfo,
+		),
+		Color: "good",
+	}
+
+}
+
 // AWS 請求情報を取得してSlackに通知する関数
 func awsBillingNotification() {
 	totalBillingInfo := GetTotalBillingInfo()
-	//fmt.Println(totalBillingInfo)
 	serviceBillingInfo := GetServiceBillingInfo()
-	//fmt.Println(serviceBillingInfo)
 	awsAccountID := GetAwsAccountID()
 
-	message := makeSlackMessage(awsAccountID, totalBillingInfo, serviceBillingInfo)
+	message := MakeSlackMessage(awsAccountID, totalBillingInfo, serviceBillingInfo)
 
 	PostSlack(message)
 
