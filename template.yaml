@@ -51,8 +51,13 @@ Resources:
       #CodeUri: hello-world/
       #Handler: hello-world
       CodeUri: handler/
-      Handler: handler/
-      Runtime: go1.x
+      #CodeUri: .
+      Handler: main
+      #Handler: bootstrap
+      #Runtime: go1.x
+      # https://docs.aws.amazon.com/ja_jp/lambda/latest/dg/lambda-golang.html
+      Runtime: provided.al2023
+      Architectures: [x86_64]
       Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
       Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
         Variables:
@@ -63,6 +68,8 @@ Resources:
           Type: Schedule
           Properties:
             Schedule: cron(0 0 * * ? *) # 日本時間AM9時に毎日通知する
+    Metadata:
+      BuildMethod: go1.x
 
 Outputs:
   NotifyAwsBillingToSlackFunction:
