@@ -6,7 +6,7 @@ This is a sample template for NotifyAwsBillingToSlack - Below is a brief explana
 .
 ├── Makefile                    <-- Make to automate build
 ├── README.md                   <-- This instructions file
-├── hello-world                 <-- Source code for a lambda function
+├── handler                     <-- Source code for a lambda function
 │   └── main.go                 <-- Lambda function code
 └── template.yaml
 ```
