@@ -43,6 +43,12 @@ type SlackMessage struct {
 	Icon_emoji string `json:"icon_emoji"`
 }
 
+var (
+	nowDate   = time.Now()
+	endDate   = nowDate.AddDate(0, 0, -1).Format("2006-01-02")
+	startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+)
+
 // トータルの請求情報を取得する関数
 func getTotalBillingInfo() *TotalBillingInfo {
 	// https://docs.aws.amazon.com/sdk-for-go/api/aws/credentials/#NewStaticCredentials
@@ -52,10 +58,10 @@ func getTotalBillingInfo() *TotalBillingInfo {
 		aws.NewConfig().WithRegion("ap-northeast-1"),
 	)
 
-	nowDate := time.Now()
+	//nowDate := time.Now()
 	//end := nowDate.Format("2006-01-02")
-	endDate := nowDate.AddDate(0, 0, -1).Format("2006-01-02")
-	startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	//endDate := nowDate.AddDate(0, 0, -1).Format("2006-01-02")
+	//startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 
 	if nowDate.Day() == 1 {
 		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0).Format("2006-01-02")
@@ -96,9 +102,9 @@ func getAwsServicesBillingInfo() (awsServicesBillingInfo string) {
 		aws.NewConfig().WithRegion("ap-northeast-1"),
 	)
 
-	nowDate := time.Now()
-	endDate := nowDate.Format("2006-01-02")
-	startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	//nowDate := time.Now()
+	//endDate := nowDate.Format("2006-01-02")
+	//startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 	if nowDate.Day() == 1 {
 		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0).Format("2006-01-02")
 	}
@@ -177,7 +183,7 @@ func getAwsAccountID() (awsAccountID string) {
 }
 
 // Slack へ送る請求情報を作成する
-func NewSlackMessage(awsAccountID string, totalBillingInfo *TotalBillingInfo, awsServicesBillingInfo string) SlackMessage {
+func makeSlackMessage(awsAccountID string, totalBillingInfo *TotalBillingInfo, awsServicesBillingInfo string) SlackMessage {
 	return SlackMessage{
 		// TotalBillingInfoの型を参照している
 		Username:   "aws-cost-and-usage-report (webhook)",
@@ -223,7 +229,7 @@ func awsBillingNotification() {
 	//fmt.Println(serviceBillingInfo)
 	awsAccountID := getAwsAccountID()
 
-	message := NewSlackMessage(awsAccountID, totalBillingInfo, awsServicesBillingInfo)
+	message := makeSlackMessage(awsAccountID, totalBillingInfo, awsServicesBillingInfo)
 
 	postSlack(message)
 
