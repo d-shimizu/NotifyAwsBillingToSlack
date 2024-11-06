@@ -1,6 +1,6 @@
-# NotifyAwsBillingToSlack
+# notify-aws-billing-info-to-slack
 
-This is a sample template for NotifyAwsBillingToSlack - Below is a brief explanation of what we have generated for you:
+This is a sample template for notify-aws-billing-info-to-slack - Below is a brief explanation of what we have generated for you:
 
 ```bash
 .
@@ -23,9 +23,9 @@ This is a sample template for NotifyAwsBillingToSlack - Below is a brief explana
 To deploy your application for the first time, run the following in your shell:
 
 ```bash
-$ git clone git@github.com:d-shimizu/NotifyAwsBillingToSlack.git
+$ git clone git@github.com:d-shimizu/notify-aws-billing-info-to-slack.git
 
-$ cd NotifyAwsBillingToSlack
+$ cd notify-aws-billing-info-to-slack
 
 $ sam build
 
