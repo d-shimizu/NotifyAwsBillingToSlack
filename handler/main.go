@@ -22,20 +22,20 @@ import (
 	"github.com/aws/aws-sdk-go/service/sts"
 )
 
-// トータル請求情報を格納する構造体
+// トータル請求情報を扱う構造体
 type TotalBillingInfo struct {
-	startDate    string `json:"start_date"`
-	endDate      string `json:"end_date"`
-	totalBilling string `json:"total_billing"`
+	startDate    string
+	endDate      string
+	totalBilling string
 }
 
-// サービスごとの請求情報を格納する構造体
+// サービスごとの請求情報を扱う構造体
 type ServiceBillingInfo struct {
-	awsService string `json:"aws_service"`
-	billing    string `json:"billing"`
+	awsService string
+	billing    string
 }
 
-// Slackに送信するメッセージを格納する構造体
+// Slackに送信するメッセージを扱う構造体
 type SlackMessage struct {
 	Text       string `json:"text"`
 	Color      string `json:"color"`
@@ -43,8 +43,14 @@ type SlackMessage struct {
 	Icon_emoji string `json:"icon_emoji"`
 }
 
+var (
+	nowDate   = time.Now()
+	endDate   = nowDate.AddDate(0, 0, -1).Format("2006-01-02")
+	startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+)
+
 // トータルの請求情報を取得する関数
-func GetTotalBillingInfo() *TotalBillingInfo {
+func getTotalBillingInfo() *TotalBillingInfo {
 	// https://docs.aws.amazon.com/sdk-for-go/api/aws/credentials/#NewStaticCredentials
 	sess := session.Must(session.NewSession())
 	svc := costexplorer.New(
@@ -52,10 +58,10 @@ func GetTotalBillingInfo() *TotalBillingInfo {
 		aws.NewConfig().WithRegion("ap-northeast-1"),
 	)
 
-	nowDate := time.Now()
+	//nowDate := time.Now()
 	//end := nowDate.Format("2006-01-02")
-	endDate := nowDate.AddDate(0, 0, -1).Format("2006-01-02")
-	startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	//endDate := nowDate.AddDate(0, 0, -1).Format("2006-01-02")
+	//startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 
 	if nowDate.Day() == 1 {
 		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0).Format("2006-01-02")
@@ -63,10 +69,10 @@ func GetTotalBillingInfo() *TotalBillingInfo {
 
 	// https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html#awscostmanagement-GetCostAndUsage-request-TimePeriod
 	// https://gitter.im/aws/aws-sdk-go?at=5df056990995661eb8c4a773
-	output, err := svc.GetCostAndUsage(&costexplorer.GetCostAndUsageInput{
+	thisMonthCost, err := svc.GetCostAndUsage(&costexplorer.GetCostAndUsageInput{
 		Granularity: aws.String("MONTHLY"),
 		Metrics: []*string{
-			aws.String("AmortizedCost"),
+			aws.String("UnblendedCost"),
 		},
 		TimePeriod: &costexplorer.DateInterval{
 			Start: aws.String(startDate),
@@ -79,8 +85,7 @@ func GetTotalBillingInfo() *TotalBillingInfo {
 	// for debug
 	// fmt.Println(output)
 
-	total := output.ResultsByTime[0].Total["AmortizedCost"]
-	totalBilling := aws.StringValue(total.Amount)
+	totalBilling := aws.StringValue(thisMonthCost.ResultsByTime[0].Total["UnblendedCost"].Amount)
 
 	return &TotalBillingInfo{
 		startDate:    startDate,
@@ -89,27 +94,27 @@ func GetTotalBillingInfo() *TotalBillingInfo {
 	}
 }
 
-// サービスごとの請求情報を取得する関数
-func GetServiceBillingInfo() string {
+// AWS サービスごとの請求情報を取得する関数
+func getAwsServicesBillingInfo() (awsServicesBillingInfo string) {
 	sess := session.Must(session.NewSession())
 	svc := costexplorer.New(
 		sess,
 		aws.NewConfig().WithRegion("ap-northeast-1"),
 	)
 
-	nowDate := time.Now()
-	endDate := nowDate.Format("2006-01-02")
-	startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	//nowDate := time.Now()
+	//endDate := nowDate.Format("2006-01-02")
+	//startDate := time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 	if nowDate.Day() == 1 {
 		startDate = time.Date(nowDate.Year(), nowDate.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0).Format("2006-01-02")
 	}
 
 	// https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html#awscostmanagement-GetCostAndUsage-request-TimePeriod
 	// https://gitter.im/aws/aws-sdk-go?at=5df056990995661eb8c4a773
-	costAndUsageResponse, err := svc.GetCostAndUsage(&costexplorer.GetCostAndUsageInput{
+	thisMonthCostEachService, err := svc.GetCostAndUsage(&costexplorer.GetCostAndUsageInput{
 		Granularity: aws.String("MONTHLY"),
 		Metrics: []*string{
-			aws.String("AmortizedCost"),
+			aws.String("UnblendedCost"),
 		},
 		TimePeriod: &costexplorer.DateInterval{
 			Start: aws.String(startDate),
@@ -124,23 +129,23 @@ func GetServiceBillingInfo() string {
 		log.Fatal(err)
 	}
 
-	numberOfServiceCounts := len(costAndUsageResponse.ResultsByTime[0].Groups)
+	numberOfAwsServices := len(thisMonthCostEachService.ResultsByTime[0].Groups)
 	awsServiceAndCostMapping := make(map[string]string)
 	// AWS サービスごとの請求情報を取得する
-	for i := 0; i < numberOfServiceCounts; i++ {
-		awsServiceName := costAndUsageResponse.ResultsByTime[0].Groups[i].Keys[0]
+	for i := 0; i < numberOfAwsServices; i++ {
+		awsServiceName := thisMonthCostEachService.ResultsByTime[0].Groups[i].Keys[0]
 		fmt.Println(*awsServiceName)
 
-		awsServiceCost := costAndUsageResponse.ResultsByTime[0].Groups[i].Metrics["AmortizedCost"].Amount
+		awsServiceCost := thisMonthCostEachService.ResultsByTime[0].Groups[i].Metrics["UnblendedCost"].Amount
 		fmt.Println(*awsServiceCost)
 
 		awsServiceAndCostMapping[*awsServiceName] = *awsServiceCost
 
 	}
 	// for debug
-	fmt.Println(awsServiceAndCostMapping)
+	//fmt.Println(awsServiceAndCostMapping)
 
-	awsServices := make([]string, numberOfServiceCounts)
+	awsServices := make([]string, numberOfAwsServices)
 	index := 0
 	for key, _ := range awsServiceAndCostMapping {
 		awsServices[index] = key
@@ -149,19 +154,36 @@ func GetServiceBillingInfo() string {
 	sort.Strings(awsServices)
 
 	//service_billings := ""
-	var awsServiceBillings string
+	//var awsServiceBillings string
 	for _, v := range awsServices {
 		awsServiceBilling := v + " :  " + awsServiceAndCostMapping[v] + "\n"
-		awsServiceBillings += awsServiceBilling
+		awsServicesBillingInfo += awsServiceBilling
 	}
-	return awsServiceBillings
+	return awsServicesBillingInfo
 
 }
 
-// 構造体が引数にある場合に戻り値の構造体はポインタにできない
-// Slack へのメッセージを作成する関数
-func makeSlackMessage(awsAccountID string, totalBillingInfo *TotalBillingInfo, serviceBillingInfo string) SlackMessage {
+func getAwsAccountID() (awsAccountID string) {
+	svc := sts.New(session.New())
+	input := &sts.GetCallerIdentityInput{}
 
+	result, err := svc.GetCallerIdentity(input)
+	if err != nil {
+		if awserr, ok := err.(awserr.Error); ok {
+			switch awserr.Code() {
+			default:
+				fmt.Println(awserr.Error())
+			}
+		} else {
+			fmt.Println(err.Error())
+		}
+	}
+	awsAccountID = *result.Account
+	return awsAccountID
+}
+
+// Slack へ送る請求情報を作成する
+func makeSlackMessage(awsAccountID string, totalBillingInfo *TotalBillingInfo, awsServicesBillingInfo string) SlackMessage {
 	return SlackMessage{
 		// TotalBillingInfoの型を参照している
 		Username:   "aws-cost-and-usage-report (webhook)",
@@ -171,35 +193,16 @@ func makeSlackMessage(awsAccountID string, totalBillingInfo *TotalBillingInfo, s
 			totalBillingInfo.startDate,
 			totalBillingInfo.endDate,
 			totalBillingInfo.totalBilling,
-			serviceBillingInfo,
+			awsServicesBillingInfo,
 		),
 		Color: "good",
 	}
 
 }
 
-func GetAwsAccountID() string {
-	svc := sts.New(session.New())
-	input := &sts.GetCallerIdentityInput{}
-
-	result, err := svc.GetCallerIdentity(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			default:
-				fmt.Println(aerr.Error())
-			}
-		} else {
-			fmt.Println(err.Error())
-		}
-	}
-	awsAccountID := *result.Account
-	return awsAccountID
-}
-
-func PostSlack(message SlackMessage) {
+func postSlack(message SlackMessage) {
 	input, _ := json.Marshal(message)
-	fmt.Println(string(input))
+	//fmt.Println(string(input))
 
 	// https://qiita.com/kou_pg_0131/items/1eee0c46f478438aa115
 	svc := ssm.New(session.New(), &aws.Config{
@@ -220,15 +223,15 @@ func PostSlack(message SlackMessage) {
 
 // AWS 請求情報を取得してSlackに通知する関数
 func awsBillingNotification() {
-	totalBillingInfo := GetTotalBillingInfo()
+	totalBillingInfo := getTotalBillingInfo()
 	//fmt.Println(totalBillingInfo)
-	serviceBillingInfo := GetServiceBillingInfo()
+	awsServicesBillingInfo := getAwsServicesBillingInfo()
 	//fmt.Println(serviceBillingInfo)
-	awsAccountID := GetAwsAccountID()
+	awsAccountID := getAwsAccountID()
 
-	message := makeSlackMessage(awsAccountID, totalBillingInfo, serviceBillingInfo)
+	message := makeSlackMessage(awsAccountID, totalBillingInfo, awsServicesBillingInfo)
 
-	PostSlack(message)
+	postSlack(message)
 
 }
 
